@@ -1,0 +1,44 @@
+# Simple baseline configuration
+
+# Task type
+task_type: "base"  # Options: base, segmentation, classification, regression
+
+# Model parameters
+model_name: "unet"  # Model architecture
+backbone_name: "resnet18"  # Backbone for applicable models
+weight_init: "pretrained"  # Options: pretrained, random
+
+# Input/output parameters
+in_channels: 3  # Number of input channels
+out_channels: 1  # Number of output channels
+image_size: [224, 224]  # Input image size
+
+# Optimizer parameters
+optimizer: "adamw"  # Options: adam, adamw, sgd, rmsprop
+lr: 0.001  # Learning rate
+weight_decay: 0.01  # Weight decay for regularization
+scheduler: "cosine"  # Options: cosine, plateau, step, none
+patience: 10  # Patience for plateau scheduler
+t_max: 10  # T_max for cosine scheduler
+
+# Loss function
+loss: "mse"  # Options: mse, bce, ce, huber
+
+# Training parameters
+batch_size: 32  # Batch size
+max_epochs: 100  # Maximum number of epochs
+seed: 42  # Random seed for reproducibility
+gpu_ids: [0]  # GPU IDs to use
+val_ratio: 0.2  # Validation split ratio
+num_workers: 4  # Number of workers for data loading
+
+# Experiment parameters
+experiment_short_name: "simple_baseline"
+log_dir: "logs/"
+output_dir: "model_runs/"
+overwrite: true  # Overwrite existing experiment
+early_stop: true  # Use early stopping
+early_stop_patience: 20  # Patience for early stopping
+
+# Data parameters - customize for your project
+# input_dirs: ["path/to/your/data"]  # Path to training data

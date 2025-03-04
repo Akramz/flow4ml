@@ -1,0 +1,44 @@
+# Advanced architecture experiment
+
+# Task type
+task_type: "base"  
+
+# Model parameters
+model_name: "unet"  
+backbone_name: "resnet50"  # Changed from resnet18 to resnet50
+weight_init: "pretrained"  
+
+# Input/output parameters
+in_channels: 3
+out_channels: 1
+image_size: [224, 224]
+
+# Optimizer parameters
+optimizer: "adamw"
+lr: 0.001
+weight_decay: 0.01
+scheduler: "cosine"
+patience: 10
+t_max: 10
+
+# Loss function
+loss: "mse"
+
+# Training parameters
+batch_size: 32
+max_epochs: 100
+seed: 42
+gpu_ids: [0]
+val_ratio: 0.2
+num_workers: 4
+
+# Experiment parameters
+experiment_short_name: "resnet50_backbone"
+log_dir: "logs/"
+output_dir: "model_runs/"
+overwrite: true
+early_stop: true
+early_stop_patience: 20
+
+# Data parameters - customize for your project
+# input_dirs: ["path/to/your/data"]
