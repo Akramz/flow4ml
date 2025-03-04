@@ -24,7 +24,7 @@ from torchmetrics.regression import MeanSquaredError, MeanAbsoluteError
 
 class BaseTask(pl.LightningModule):
     """Base Lightning Module for training models."""
-    
+
     def __init__(
         self,
         model,
@@ -34,10 +34,10 @@ class BaseTask(pl.LightningModule):
         optimizer="adamw",
         scheduler="cosine",
         scheduler_params=None,
-        **kwargs
+        **kwargs,
     ):
         """Initialize the Lightning Module.
-        
+
         Args:
             model: PyTorch model to train
             loss: Loss function to use
@@ -53,10 +53,10 @@ class BaseTask(pl.LightningModule):
         self.model = model
         self.configure_loss(loss)
         self.configure_metrics()
-        
+
     def configure_loss(self, loss_name):
         """Configure loss function.
-        
+
         Args:
             loss_name: Name of the loss function
         """
@@ -73,36 +73,42 @@ class BaseTask(pl.LightningModule):
             self.loss_fn = nn.MSELoss()  # Placeholder
         else:
             raise ValueError(f"Unsupported loss: {loss_name}")
-    
+
     def configure_metrics(self):
         """Configure metrics for evaluation."""
         # Customize or extend these metrics for your specific task
-        self.train_metrics = MetricCollection({
-            'train_mse': MeanSquaredError(),
-            'train_mae': MeanAbsoluteError(),
-        })
-        
-        self.val_metrics = MetricCollection({
-            'val_mse': MeanSquaredError(),
-            'val_mae': MeanAbsoluteError(),
-        })
-        
-        self.test_metrics = MetricCollection({
-            'test_mse': MeanSquaredError(),
-            'test_mae': MeanAbsoluteError(),
-        })
-        
+        self.train_metrics = MetricCollection(
+            {
+                "train_mse": MeanSquaredError(),
+                "train_mae": MeanAbsoluteError(),
+            }
+        )
+
+        self.val_metrics = MetricCollection(
+            {
+                "val_mse": MeanSquaredError(),
+                "val_mae": MeanAbsoluteError(),
+            }
+        )
+
+        self.test_metrics = MetricCollection(
+            {
+                "test_mse": MeanSquaredError(),
+                "test_mae": MeanAbsoluteError(),
+            }
+        )
+
     def forward(self, x):
         """Forward pass."""
         return self.model(x)
-    
+
     def training_step(self, batch, batch_idx):
         """Training step.
-        
+
         Args:
             batch: Current batch
             batch_idx: Index of current batch
-            
+
         Returns:
             Loss value
         """
@@ -110,21 +116,21 @@ class BaseTask(pl.LightningModule):
         x, y = batch["image"], batch["target"]
         y_hat = self(x)
         loss = self.loss_fn(y_hat, y)
-        
+
         # Update and log metrics
         self.train_metrics(y_hat, y)
         self.log("train_loss", loss)
         self.log_dict(self.train_metrics)
-        
+
         # Visualize training examples occasionally
         if batch_idx % 100 == 0:
             self.visualize_batch(x, y, y_hat, "train", batch_idx)
-            
+
         return loss
-    
+
     def validation_step(self, batch, batch_idx):
         """Validation step.
-        
+
         Args:
             batch: Current batch
             batch_idx: Index of current batch
@@ -132,30 +138,30 @@ class BaseTask(pl.LightningModule):
         x, y = batch["image"], batch["target"]
         y_hat = self(x)
         loss = self.loss_fn(y_hat, y)
-        
+
         # Update and log metrics
         self.val_metrics(y_hat, y)
         self.log("val_loss", loss)
         self.log_dict(self.val_metrics)
-        
+
         # Visualize validation examples occasionally
         if batch_idx == 0:
             self.visualize_batch(x, y, y_hat, "val", self.current_epoch)
-    
+
     def test_step(self, batch, batch_idx):
         """Test step.
-        
+
         Args:
             batch: Current batch
             batch_idx: Index of current batch
         """
         x, y = batch["image"], batch["target"]
         y_hat = self(x)
-        
+
         # Update and log metrics
         self.test_metrics(y_hat, y)
         self.log_dict(self.test_metrics)
-    
+
     def configure_optimizers(self):
         """Configure optimizers and learning rate schedulers."""
         # Select optimizer
@@ -163,64 +169,70 @@ class BaseTask(pl.LightningModule):
             optimizer = torch.optim.Adam(
                 self.parameters(),
                 lr=self.hparams.learning_rate,
-                weight_decay=self.hparams.weight_decay
+                weight_decay=self.hparams.weight_decay,
             )
         elif self.hparams.optimizer == "adamw":
             optimizer = torch.optim.AdamW(
                 self.parameters(),
                 lr=self.hparams.learning_rate,
-                weight_decay=self.hparams.weight_decay
+                weight_decay=self.hparams.weight_decay,
             )
         elif self.hparams.optimizer == "sgd":
             optimizer = torch.optim.SGD(
                 self.parameters(),
                 lr=self.hparams.learning_rate,
                 weight_decay=self.hparams.weight_decay,
-                momentum=0.9
+                momentum=0.9,
             )
         elif self.hparams.optimizer == "rmsprop":
             optimizer = torch.optim.RMSprop(
                 self.parameters(),
                 lr=self.hparams.learning_rate,
-                weight_decay=self.hparams.weight_decay
+                weight_decay=self.hparams.weight_decay,
             )
         else:
             raise ValueError(f"Unsupported optimizer: {self.hparams.optimizer}")
-        
+
         # Configure scheduler
         if self.hparams.scheduler == "cosine":
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer,
-                T_max=self.hparams.get("t_max", 10),
-                eta_min=1e-6
+                optimizer, T_max=self.hparams.get("t_max", 10), eta_min=1e-6
             )
-            return {"optimizer": optimizer, "lr_scheduler": scheduler, "monitor": "val_loss"}
-        
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": scheduler,
+                "monitor": "val_loss",
+            }
+
         elif self.hparams.scheduler == "plateau":
             scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
                 optimizer,
                 patience=self.hparams.get("patience", 10),
-                factor=self.hparams.get("factor", 0.1)
+                factor=self.hparams.get("factor", 0.1),
             )
-            return {"optimizer": optimizer, "lr_scheduler": scheduler, "monitor": "val_loss"}
-        
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": scheduler,
+                "monitor": "val_loss",
+            }
+
         elif self.hparams.scheduler == "step":
             scheduler = torch.optim.lr_scheduler.StepLR(
                 optimizer,
                 step_size=self.hparams.get("step_size", 30),
-                gamma=self.hparams.get("gamma", 0.1)
+                gamma=self.hparams.get("gamma", 0.1),
             )
             return {"optimizer": optimizer, "lr_scheduler": scheduler}
-        
+
         elif self.hparams.scheduler == "none" or self.hparams.scheduler is None:
             return {"optimizer": optimizer}
-        
+
         else:
             raise ValueError(f"Unsupported scheduler: {self.hparams.scheduler}")
-    
+
     def visualize_batch(self, x, y, y_hat, stage, idx):
         """Visualize a batch of data.
-        
+
         Args:
             x: Input images
             y: Target
@@ -231,14 +243,14 @@ class BaseTask(pl.LightningModule):
         # Customize this method based on your task/data
         if not hasattr(self, "logger") or self.logger is None:
             return
-            
+
         # Take the first few samples
         n_samples = min(4, x.size(0))
-        
+
         fig, axs = plt.subplots(n_samples, 3, figsize=(12, 4 * n_samples))
         if n_samples == 1:
             axs = axs.reshape(1, -1)
-            
+
         for i in range(n_samples):
             # Display input image (assumes first 3 channels are RGB)
             img = x[i, :3].permute(1, 2, 0).cpu().numpy()
@@ -246,93 +258,235 @@ class BaseTask(pl.LightningModule):
             axs[i, 0].imshow(img)
             axs[i, 0].set_title("Input")
             axs[i, 0].axis("off")
-            
+
             # Display target (adapt this to your task)
             target = y[i, 0].cpu().numpy()
             axs[i, 1].imshow(target, cmap="viridis")
             axs[i, 1].set_title("Target")
             axs[i, 1].axis("off")
-            
+
             # Display prediction
             pred = y_hat[i, 0].detach().cpu().numpy()
             axs[i, 2].imshow(pred, cmap="viridis")
             axs[i, 2].set_title("Prediction")
             axs[i, 2].axis("off")
-        
+
         plt.tight_layout()
-        
+
         # Log to tensorboard
-        self.logger.experiment.add_figure(f"{stage}_visualization_epoch_{idx}", fig, global_step=self.global_step)
+        self.logger.experiment.add_figure(
+            f"{stage}_visualization_epoch_{idx}", fig, global_step=self.global_step
+        )
         plt.close(fig)
 
 
 class SegmentationTask(BaseTask):
-    """Task for semantic segmentation."""
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Add segmentation-specific metrics
-        self.val_metrics.add_metrics({
-            'val_precision': Precision(task="binary", threshold=0.5),
-            'val_recall': Recall(task="binary", threshold=0.5),
-            'val_f1': F1Score(task="binary", threshold=0.5)
-        })
-    
+    """Task for semantic segmentation.
+
+    This class serves as a wrapper around TorchGeo's SemanticSegmentationTask.
+    """
+
+    def __init__(self, model, *args, **kwargs):
+        """Initialize segmentation task.
+
+        Args:
+            model: Model to use (RandomModel or None for TorchGeo models)
+            *args, **kwargs: Additional arguments
+        """
+        # Import TorchGeo's semantic segmentation task
+        from torchgeo.trainers import SemanticSegmentationTask
+
+        # For RandomModel, we use our own implementation
+        if model.__class__.__name__ == "RandomModel":
+            super().__init__(model, *args, **kwargs)
+            # Add segmentation-specific metrics
+            self.val_metrics.add_metrics(
+                {
+                    "val_precision": Precision(
+                        task=(
+                            "binary"
+                            if kwargs.get("out_channels", 2) <= 2
+                            else "multiclass"
+                        ),
+                        num_classes=kwargs.get("out_channels", 2),
+                    ),
+                    "val_recall": Recall(
+                        task=(
+                            "binary"
+                            if kwargs.get("out_channels", 2) <= 2
+                            else "multiclass"
+                        ),
+                        num_classes=kwargs.get("out_channels", 2),
+                    ),
+                    "val_f1": F1Score(
+                        task=(
+                            "binary"
+                            if kwargs.get("out_channels", 2) <= 2
+                            else "multiclass"
+                        ),
+                        num_classes=kwargs.get("out_channels", 2),
+                    ),
+                }
+            )
+            self.is_random_model = True
+        else:
+            # Use TorchGeo's implementation for standard models
+            # Extract parameters for TorchGeo
+            model_name = kwargs.pop("model_name", "unet")
+            backbone_name = kwargs.pop("backbone_name", None)
+            weight_init = kwargs.pop("weight_init", "random")
+            weights = "imagenet" if weight_init == "pretrained" else None
+            in_channels = kwargs.pop("in_channels", 3)
+            out_channels = kwargs.pop("out_channels", 2)
+            loss_name = kwargs.pop("loss", "ce")
+            lr = kwargs.pop("learning_rate", 0.001)
+
+            # Create TorchGeo task
+            self.torchgeo_task = SemanticSegmentationTask(
+                model=model_name,
+                backbone=backbone_name,
+                weights=weights,
+                in_channels=in_channels,
+                num_classes=out_channels,
+                loss=loss_name,
+                lr=lr,
+            )
+            self.is_random_model = False
+
+            # For access to hyperparameters
+            self.hparams = {}
+            for key, value in kwargs.items():
+                self.hparams[key] = value
+
+            # Add model parameters for completeness
+            self.hparams["model_name"] = model_name
+            self.hparams["backbone_name"] = backbone_name
+            self.hparams["weight_init"] = weight_init
+            self.hparams["in_channels"] = in_channels
+            self.hparams["out_channels"] = out_channels
+            self.hparams["loss"] = loss_name
+            self.hparams["learning_rate"] = lr
+
+    def forward(self, x):
+        """Forward pass."""
+        if self.is_random_model:
+            return super().forward(x)
+        else:
+            return self.torchgeo_task(x)
+
+    def training_step(self, batch, batch_idx):
+        """Training step."""
+        if self.is_random_model:
+            return super().training_step(batch, batch_idx)
+        else:
+            # Adapt batch format if needed
+            if "image" in batch and "target" in batch and "mask" not in batch:
+                batch = {"image": batch["image"], "mask": batch["target"]}
+            return self.torchgeo_task.training_step(batch, batch_idx)
+
+    def validation_step(self, batch, batch_idx):
+        """Validation step."""
+        if self.is_random_model:
+            return super().validation_step(batch, batch_idx)
+        else:
+            # Adapt batch format if needed
+            if "image" in batch and "target" in batch and "mask" not in batch:
+                batch = {"image": batch["image"], "mask": batch["target"]}
+            return self.torchgeo_task.validation_step(batch, batch_idx)
+
+    def test_step(self, batch, batch_idx):
+        """Test step."""
+        if self.is_random_model:
+            return super().test_step(batch, batch_idx)
+        else:
+            # Adapt batch format if needed
+            if "image" in batch and "target" in batch and "mask" not in batch:
+                batch = {"image": batch["image"], "mask": batch["target"]}
+            return self.torchgeo_task.test_step(batch, batch_idx)
+
+    def configure_optimizers(self):
+        """Configure optimizers and learning rate schedulers."""
+        if self.is_random_model:
+            return super().configure_optimizers()
+        else:
+            return self.torchgeo_task.configure_optimizers()
+
     def visualize_batch(self, x, y, y_hat, stage, idx):
-        """Override to customize visualization for segmentation."""
+        """Visualization for segmentation tasks."""
         if not hasattr(self, "logger") or self.logger is None:
             return
-            
+
         n_samples = min(4, x.size(0))
-        
+
         fig, axs = plt.subplots(n_samples, 3, figsize=(12, 4 * n_samples))
         if n_samples == 1:
             axs = axs.reshape(1, -1)
-            
+
         for i in range(n_samples):
-            # Input image
-            img = x[i, :3].permute(1, 2, 0).cpu().numpy()
-            img = np.clip(img, 0, 1)
-            axs[i, 0].imshow(img)
+            # Input image - for multispectral data, show RGB channels if available
+            if x.size(1) >= 3:
+                img = x[i, :3].permute(1, 2, 0).cpu().numpy()
+                img = np.clip(img, 0, 1)
+                axs[i, 0].imshow(img)
+            else:
+                img = x[i, 0].cpu().numpy()
+                axs[i, 0].imshow(img, cmap="viridis")
+
             axs[i, 0].set_title("Input")
             axs[i, 0].axis("off")
-            
-            # Target mask (binary)
-            target = y[i, 0].cpu().numpy()
-            axs[i, 1].imshow(target, cmap="gray")
+
+            # Target mask (binary or multi-class)
+            if y.size(1) == 1:
+                # Binary mask
+                target = y[i, 0].cpu().numpy()
+                axs[i, 1].imshow(target, cmap="gray")
+            else:
+                # Multi-class mask (display class indices)
+                target = y[i].argmax(0).cpu().numpy()
+                axs[i, 1].imshow(target, cmap="tab20")
+
             axs[i, 1].set_title("Target Mask")
             axs[i, 1].axis("off")
-            
+
             # Predicted mask
-            pred = y_hat[i, 0].detach().cpu().numpy()
-            pred = (pred > 0.5).astype(np.float32)  # Threshold
-            axs[i, 2].imshow(pred, cmap="gray")
+            if y_hat.size(1) == 1:
+                # Binary prediction
+                pred = y_hat[i, 0].detach().cpu().numpy()
+                pred = (pred > 0.5).astype(np.float32)  # Threshold
+                axs[i, 2].imshow(pred, cmap="gray")
+            else:
+                # Multi-class prediction
+                pred = y_hat[i].argmax(0).detach().cpu().numpy()
+                axs[i, 2].imshow(pred, cmap="tab20")
+
             axs[i, 2].set_title("Predicted Mask")
             axs[i, 2].axis("off")
-        
+
         plt.tight_layout()
-        self.logger.experiment.add_figure(f"{stage}_segmentation_{idx}", fig, global_step=self.global_step)
+        self.logger.experiment.add_figure(
+            f"{stage}_segmentation_{idx}", fig, global_step=self.global_step
+        )
         plt.close(fig)
 
 
 class RegressionTask(BaseTask):
     """Task for regression problems."""
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Additional regression metrics can be added here
-    
+
     def visualize_batch(self, x, y, y_hat, stage, idx):
         """Override to customize visualization for regression tasks."""
         if not hasattr(self, "logger") or self.logger is None:
             return
-            
+
         n_samples = min(4, x.size(0))
-        
+
         fig, axs = plt.subplots(n_samples, 3, figsize=(12, 4 * n_samples))
         if n_samples == 1:
             axs = axs.reshape(1, -1)
-            
+
         for i in range(n_samples):
             # Input image
             img = x[i, :3].permute(1, 2, 0).cpu().numpy()
@@ -340,39 +494,46 @@ class RegressionTask(BaseTask):
             axs[i, 0].imshow(img)
             axs[i, 0].set_title("Input")
             axs[i, 0].axis("off")
-            
+
             # Target continuous values
             target = y[i, 0].cpu().numpy()
             im = axs[i, 1].imshow(target, cmap="viridis")
             axs[i, 1].set_title("Target Values")
             axs[i, 1].axis("off")
             fig.colorbar(im, ax=axs[i, 1])
-            
+
             # Predicted values
             pred = y_hat[i, 0].detach().cpu().numpy()
             im = axs[i, 2].imshow(pred, cmap="viridis")
             axs[i, 2].set_title("Predicted Values")
             axs[i, 2].axis("off")
             fig.colorbar(im, ax=axs[i, 2])
-        
+
         plt.tight_layout()
-        self.logger.experiment.add_figure(f"{stage}_regression_{idx}", fig, global_step=self.global_step)
+        self.logger.experiment.add_figure(
+            f"{stage}_regression_{idx}", fig, global_step=self.global_step
+        )
         plt.close(fig)
 
 
 def get_task(task_type, model, **kwargs):
     """Factory function to get task by type.
-    
+
     Args:
         task_type: Type of task (segmentation, regression, classification)
         model: Model to use
         **kwargs: Additional arguments for the task
-        
+
     Returns:
         LightningModule instance
     """
+    # Get kwargs specific to the task type
+    model_name = kwargs.pop("model_name", "unet")
+
     if task_type.lower() == "segmentation":
-        return SegmentationTask(model, **kwargs)
+        # For segmentation tasks, we pass the model_name to help TorchGeo
+        # initialize the right model type
+        return SegmentationTask(model, model_name=model_name, **kwargs)
     elif task_type.lower() == "regression":
         return RegressionTask(model, **kwargs)
     elif task_type.lower() == "base":

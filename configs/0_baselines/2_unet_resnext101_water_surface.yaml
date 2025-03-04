@@ -1,0 +1,58 @@
+# UNet with resnext101_32x4d backbone for Earth Water Surface detection
+
+# Task type
+task_type: "segmentation"  # This is a segmentation task
+
+# Model parameters
+model_name: "unet"  # UNet architecture for segmentation
+backbone_name: "resnext101_32x4d"  # ResNeXt backbone as requested
+weight_init: "pretrained"  # Use pretrained weights for transfer learning
+
+# Input/output parameters
+in_channels: 9  # Original 6 bands + 3 spectral indices (NDWI1, NDWI2, NDVI)
+out_channels: 2  # Binary segmentation (water/not water)
+image_size: [512, 512]  # Image patch size from the example
+
+# Optimizer parameters
+optimizer: "adam"  # From example
+lr: 0.0001  # From example
+weight_decay: 0.01  # From example
+scheduler: "cosine"  # Cosine annealing scheduler
+t_max: 10  # T_max for cosine scheduler
+
+# Loss function
+loss: "cross_entropy"  # For segmentation task
+
+# Training parameters
+batch_size: 4  # From example
+max_epochs: 30  # More epochs for better convergence
+seed: 42  # Random seed for reproducibility
+gpu_ids: [0]  # GPU ID to use
+val_ratio: 0.2  # Validation split ratio
+num_workers: 4  # Number of workers for data loading
+
+# Experiment parameters
+experiment_short_name: "unet_resnext101_water_surface"
+log_dir: "logs/"
+output_dir: "model_runs/"
+overwrite: true  # Overwrite existing experiment
+early_stop: true  # Use early stopping
+early_stop_patience: 10  # Patience for early stopping
+metrics: ["iou", "accuracy"]  # Metrics to track
+
+# Data parameters
+dataset: "earth_surface_water"
+dataset_url: "https://hf.co/datasets/cordmaur/earth_surface_water/resolve/main/earth_surface_water.zip"
+# Define normalization and spectral indices
+spectral_indices: 
+  - type: "NDWI"
+    index_green: 1
+    index_nir: 3
+  - type: "NDWI"
+    index_green: 1
+    index_nir: 5
+  - type: "NDVI"
+    index_red: 2
+    index_nir: 3
+# Mean and std should be calculated dynamically at runtime
+normalize: true

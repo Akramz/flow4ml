@@ -36,14 +36,19 @@ GPUS_AVAILABLE = torch.cuda.device_count()
 
 class ModelEnum(str, Enum):
     """Supported model architectures."""
+
     # Add your model types here
     unet = "unet"
+    upernet = "upernet"
+    deeplabv3 = "deeplabv3"
     resnet = "resnet"
     transformer = "transformer"
+    random = "random"
 
 
 class ActivationEnum(str, Enum):
     """Supported activation functions."""
+
     relu = "relu"
     sigmoid = "sigmoid"
     tanh = "tanh"
@@ -54,6 +59,7 @@ class ActivationEnum(str, Enum):
 
 class WeightEnum(str, Enum):
     """Weight initialization options."""
+
     pretrained = "pretrained"
     random = "random"
     custom = "custom"
@@ -61,6 +67,7 @@ class WeightEnum(str, Enum):
 
 class OptimizerEnum(str, Enum):
     """Supported optimizers."""
+
     adam = "adam"
     adamw = "adamw"
     sgd = "sgd"
@@ -69,6 +76,7 @@ class OptimizerEnum(str, Enum):
 
 class LossEnum(str, Enum):
     """Supported loss functions."""
+
     mse = "mse"
     bce = "bce"
     ce = "ce"
@@ -80,6 +88,7 @@ class LossEnum(str, Enum):
 
 class SchedulerEnum(str, Enum):
     """Supported learning rate schedulers."""
+
     cosine = "cosine"
     plateau = "plateau"
     step = "step"
@@ -89,6 +98,7 @@ class SchedulerEnum(str, Enum):
 
 class PrecisionEnum(str, Enum):
     """Precision modes for training."""
+
     float32 = "32-true"
     float16 = "16-mixed"
     bfloat16 = "bf16-mixed"
@@ -99,19 +109,31 @@ class PrecisionEnum(str, Enum):
 ######################################
 
 
+class TaskTypeEnum(str, Enum):
+    """Supported task types."""
+
+    base = "base"
+    segmentation = "segmentation"
+    classification = "classification"
+    regression = "regression"
+
+
 class TrainerConfig(BaseModel):
     """Validate input from yaml and/or argparse before passing to train.py."""
+
+    # task type
+    task_type: TaskTypeEnum = TaskTypeEnum.base
 
     # model params
     model_name: ModelEnum = ModelEnum.unet
     backbone_name: Optional[str] = None
     weight_init: WeightEnum = WeightEnum.random
-    
+
     # architecture-specific params (examples)
     num_layers: Optional[int] = None
     hidden_dim: Optional[int] = None
     dropout: float = 0.0
-    
+
     # optimizer params
     optimizer: OptimizerEnum = OptimizerEnum.adamw
     lr: float = 0.001
@@ -132,7 +154,7 @@ class TrainerConfig(BaseModel):
     validation_split: float = 0.2
     test_split: Optional[float] = None
     augmentations: List[str] = []
-    
+
     # trainer params
     gpu_ids: List[int] = [0]
     seed: int = 42
@@ -151,7 +173,7 @@ class TrainerConfig(BaseModel):
     in_channels: Optional[int] = None
     out_channels: Optional[int] = None
     precision: PrecisionEnum = PrecisionEnum.float32
-    
+
     # Misc parameters
     activation: ActivationEnum = ActivationEnum.relu
     val_ratio: float = 0.1
@@ -174,7 +196,7 @@ class TrainerConfig(BaseModel):
         if GPUS_AVAILABLE == 0:
             print("Warning: No GPUs available. Using CPU.")
             return []
-            
+
         for gpu_id in gpu_ids:
             if gpu_id >= GPUS_AVAILABLE:
                 raise ValueError(

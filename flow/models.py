@@ -1,71 +1,71 @@
 """
 Models module for implementing custom model architectures.
 
-This file serves as a placeholder where you can:
-1. Define custom model architectures
-2. Import and adapt models from popular libraries 
-3. Create model factory functions
+This file provides:
+1. Implementation of a random baseline model for benchmarking
+2. Custom model implementations
+3. Factory function for model creation
 
-Examples of libraries you might want to use:
-- TorchGeo: https://torchgeo.readthedocs.io/en/stable/api/models.html
-- Segmentation Models PyTorch: https://github.com/qubvel/segmentation_models.pytorch
-- Torchvision: https://pytorch.org/vision/stable/models.html
-- Timm: https://github.com/huggingface/pytorch-image-models
-
-Example usage:
-```python
-# Import existing models
-from torchgeo.models import UNet, DeepLabV3
-import segmentation_models_pytorch as smp
-import torch.nn as nn
-
-# Create a model factory
-def get_model(config):
-    if config.model_name == "unet":
-        return UNet(
-            in_channels=config.in_channels,
-            out_channels=config.out_channels
-        )
-    elif config.model_name == "deeplabv3":
-        return DeepLabV3(
-            in_channels=config.in_channels,
-            out_channels=config.out_channels,
-            backbone=config.backbone
-        )
-    elif config.model_name == "custom":
-        return CustomModel(config)
-```
+For TorchGeo models (UNet, UPerNet, DeepLabV3, etc.), we use the 
+TorchGeo trainer directly which handles model creation.
 """
 
 import torch
 import torch.nn as nn
 
 
+class RandomModel(nn.Module):
+    """Random baseline model that outputs random predictions."""
+
+    def __init__(self, in_channels, out_channels, **kwargs):
+        """Initialize the random model.
+
+        Args:
+            in_channels: Number of input channels
+            out_channels: Number of output channels
+            **kwargs: Additional model parameters
+        """
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.dummy_param = nn.Parameter(torch.zeros(1))  # Needed for PyTorch Lightning
+
+    def forward(self, x):
+        """Forward pass that returns random predictions with the same shape as expected output.
+
+        Args:
+            x: Input tensor of shape [batch_size, in_channels, height, width]
+
+        Returns:
+            Random tensor of shape [batch_size, out_channels, height, width]
+        """
+        batch_size, _, height, width = x.shape
+        # Generate random predictions with proper shape
+        return torch.rand(batch_size, self.out_channels, height, width, device=x.device)
+
+
 class CustomModel(nn.Module):
     """Example custom model. Replace with your implementation."""
-    
+
     def __init__(self, config):
         """Initialize your model.
-        
+
         Args:
             config: Configuration object containing model parameters
         """
         super().__init__()
         # TODO: Initialize your model architecture
         self.example_conv = nn.Conv2d(
-            in_channels=config.in_channels, 
-            out_channels=64, 
-            kernel_size=3, 
-            padding=1
+            in_channels=config.in_channels, out_channels=64, kernel_size=3, padding=1
         )
         # Add more layers as needed
-        
+
     def forward(self, x):
         """Forward pass.
-        
+
         Args:
             x: Input tensor
-            
+
         Returns:
             Model output
         """
@@ -77,17 +77,21 @@ class CustomModel(nn.Module):
 
 def get_model(config):
     """Factory function to create a model instance from config.
-    
+
     Args:
         config: Configuration object with model parameters
-        
+
     Returns:
         A model instance
     """
-    # TODO: Implement a factory function that returns the appropriate model
-    # based on config.model_name and other parameters
-    
-    if config.model_name == "custom":
+    # Random baseline model is handled here,
+    # other models (unet, upernet, etc.) are handled by TorchGeo trainers
+    if config.model_name == "random":
+        return RandomModel(
+            in_channels=config.in_channels, out_channels=config.out_channels
+        )
+    elif config.model_name == "custom":
         return CustomModel(config)
     else:
-        raise ValueError(f"Model '{config.model_name}' not implemented. Add it to the get_model function.")
+        # For TorchGeo models, return None and let the trainer handle model creation
+        return None

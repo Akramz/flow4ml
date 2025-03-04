@@ -22,10 +22,10 @@ import pandas as pd
 
 def stack_samples(samples):
     """Stack a list of samples into a batch.
-    
+
     Args:
         samples: List of sample dictionaries
-        
+
     Returns:
         Dictionary with stacked tensors
     """
@@ -40,7 +40,7 @@ def stack_samples(samples):
 
 class BaseImageDataset(Dataset):
     """Base dataset for loading images and targets."""
-    
+
     def __init__(
         self,
         image_paths: List[str],
@@ -49,7 +49,7 @@ class BaseImageDataset(Dataset):
         image_size: Tuple[int, int] = (224, 224),
     ):
         """Initialize dataset.
-        
+
         Args:
             image_paths: List of paths to images
             target_paths: List of paths to targets (optional)
@@ -60,53 +60,55 @@ class BaseImageDataset(Dataset):
         self.target_paths = target_paths
         self.transforms = transforms
         self.image_size = image_size
-        
+
         # Default transforms if none provided
         if self.transforms is None:
-            self.transforms = T.Compose([
-                T.Resize(image_size),
-                T.ToTensor(),
-                T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-            ])
-    
+            self.transforms = T.Compose(
+                [
+                    T.Resize(image_size),
+                    T.ToTensor(),
+                    T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                ]
+            )
+
     def __len__(self):
         return len(self.image_paths)
-    
+
     def __getitem__(self, idx):
         """Get dataset item.
-        
+
         Args:
             idx: Index
-            
+
         Returns:
             Dictionary with image and target
         """
         # Load image
         img_path = self.image_paths[idx]
-        image = Image.open(img_path).convert('RGB')
-        
+        image = Image.open(img_path).convert("RGB")
+
         # Apply transforms
         image = self.transforms(image)
-        
+
         # Create sample dictionary
         sample = {"image": image, "path": img_path}
-        
+
         # Load target if available
         if self.target_paths is not None:
             target_path = self.target_paths[idx]
             # This is a placeholder - modify based on your target format
             # (e.g., segmentation mask, regression values, classification labels)
-            target = Image.open(target_path).convert('L')  
+            target = Image.open(target_path).convert("L")
             target = T.Resize(self.image_size)(target)
             target = T.ToTensor()(target)
             sample["target"] = target
-        
+
         return sample
 
 
 class CSVDataset(BaseImageDataset):
     """Dataset loading data paths from a CSV file."""
-    
+
     def __init__(
         self,
         csv_path: str,
@@ -117,7 +119,7 @@ class CSVDataset(BaseImageDataset):
         root_dir: Optional[str] = None,
     ):
         """Initialize dataset.
-        
+
         Args:
             csv_path: Path to CSV file
             image_col: Column name for image paths
@@ -128,40 +130,45 @@ class CSVDataset(BaseImageDataset):
         """
         # Load CSV
         self.df = pd.read_csv(csv_path)
-        
+
         # Validate columns
         if image_col not in self.df.columns:
             raise ValueError(f"CSV file does not contain column '{image_col}'")
-        
+
         if target_col is not None and target_col not in self.df.columns:
-            print(f"Warning: CSV file does not contain target column '{target_col}'. Running without targets.")
+            print(
+                f"Warning: CSV file does not contain target column '{target_col}'. Running without targets."
+            )
             target_col = None
-        
+
         # Extract paths
         image_paths = self.df[image_col].tolist()
         target_paths = None if target_col is None else self.df[target_col].tolist()
-        
+
         # Prepend root directory if provided
         if root_dir is not None:
             image_paths = [os.path.join(root_dir, p) for p in image_paths]
             if target_paths is not None:
                 target_paths = [os.path.join(root_dir, p) for p in target_paths]
-        
+
         # Initialize base class
         super().__init__(image_paths, target_paths, transforms, image_size)
-        
+
         # Store additional metadata
-        self.metadata = {col: self.df[col].tolist() for col in self.df.columns 
-                         if col not in [image_col, target_col]}
-    
+        self.metadata = {
+            col: self.df[col].tolist()
+            for col in self.df.columns
+            if col not in [image_col, target_col]
+        }
+
     def __getitem__(self, idx):
         """Get dataset item with metadata."""
         sample = super().__getitem__(idx)
-        
+
         # Add metadata
         for key, values in self.metadata.items():
             sample[key] = values[idx]
-        
+
         return sample
 
 
@@ -169,26 +176,259 @@ class CSVDataset(BaseImageDataset):
 # Example: segmentation, classification, remote sensing, etc.
 
 
+class EarthSurfaceWaterDataset:
+    """Dataset for the Earth Surface Water dataset from TorchGeo."""
+
+    def __init__(
+        self,
+        root_dir=None,
+        dataset_url="https://hf.co/datasets/cordmaur/earth_surface_water/resolve/main/earth_surface_water.zip",
+        transform=None,
+        image_size=(512, 512),
+        normalize=True,
+        spectral_indices=None,
+    ):
+        """Initialize the Earth Surface Water dataset.
+
+        Args:
+            root_dir: Root directory where the dataset will be stored
+            dataset_url: URL to download the dataset from
+            transform: Transforms to apply to the data
+            image_size: Image size (height, width)
+            normalize: Whether to normalize the data
+            spectral_indices: List of spectral indices to compute
+        """
+        import tempfile
+        from pathlib import Path
+        import torch
+
+        # Import TorchGeo components
+        try:
+            from torchgeo.datasets import (
+                RasterDataset,
+                utils,
+                unbind_samples,
+                stack_samples,
+            )
+            from torchgeo.samplers import RandomGeoSampler, Units
+            from torchgeo.transforms import indices
+        except ImportError:
+            raise ImportError(
+                "TorchGeo is required for the Earth Surface Water dataset"
+            )
+
+        self.root_dir = root_dir or Path(tempfile.gettempdir()) / "surface_water"
+        self.dataset_url = dataset_url
+        self.image_size = image_size
+        self.normalize = normalize
+        self.spectral_indices = spectral_indices
+
+        # Download and extract dataset if needed
+        utils.download_and_extract_archive(
+            self.dataset_url,
+            self.root_dir,
+        )
+
+        # Define the root path to the extracted dataset
+        extracted_path = self.root_dir / "dset-s2"
+
+        # Function to scale Sentinel-2 values to reflectance
+        def scale(item):
+            item["image"] = item["image"] / 10000
+            return item
+
+        # Create the training datasets
+        self.train_imgs = RasterDataset(
+            paths=(extracted_path / "tra_scene").as_posix(),
+            crs="epsg:3395",
+            res=10,
+            transforms=scale,
+        )
+        self.train_msks = RasterDataset(
+            paths=(extracted_path / "tra_truth").as_posix(), crs="epsg:3395", res=10
+        )
+
+        # Create the validation datasets
+        self.valid_imgs = RasterDataset(
+            paths=(extracted_path / "val_scene").as_posix(),
+            crs="epsg:3395",
+            res=10,
+            transforms=scale,
+        )
+        self.valid_msks = RasterDataset(
+            paths=(extracted_path / "val_truth").as_posix(), crs="epsg:3395", res=10
+        )
+
+        # Mark the masks as non-images
+        self.train_msks.is_image = False
+        self.valid_msks.is_image = False
+
+        # Combine images with masks
+        self.train_dset = self.train_imgs & self.train_msks
+        self.valid_dset = self.valid_imgs & self.valid_msks
+
+        # Create the samplers
+        self.train_sampler = RandomGeoSampler(
+            self.train_imgs, size=self.image_size[0], length=130, units=Units.PIXELS
+        )
+        self.valid_sampler = RandomGeoSampler(
+            self.valid_imgs, size=self.image_size[0], length=64, units=Units.PIXELS
+        )
+
+        # Calculate dataset statistics
+        if self.normalize:
+            mean, std = self.calc_statistics(self.train_imgs)
+            # For spectral indices, append zeros/ones to mean/std
+            if self.spectral_indices:
+                import numpy as np
+
+                n_indices = len(self.spectral_indices)
+                mean = np.concatenate([mean, np.zeros(n_indices)])
+                std = np.concatenate([std, np.ones(n_indices)])
+            self.mean = mean
+            self.std = std
+
+        # Generate transforms
+        self.transform = self.create_transforms()
+
+    def calc_statistics(self, dataset):
+        """Calculate mean and standard deviation for the dataset.
+
+        Args:
+            dataset: Dataset to calculate statistics for
+
+        Returns:
+            Mean and standard deviation (numpy arrays)
+        """
+        import numpy as np
+        import rasterio as rio
+
+        # Get files from the dataset's index
+        files = [
+            item.object
+            for item in dataset.index.intersection(dataset.index.bounds, objects=True)
+        ]
+
+        # Reset statistics
+        accum_mean = 0
+        accum_std = 0
+
+        # Calculate statistics for each file
+        for file in files:
+            img = rio.open(file).read() / 10000
+            accum_mean += img.reshape((img.shape[0], -1)).mean(axis=1)
+            accum_std += img.reshape((img.shape[0], -1)).std(axis=1)
+
+        return accum_mean / len(files), accum_std / len(files)
+
+    def create_transforms(self):
+        """Create transforms for the dataset.
+
+        Returns:
+            Transforms to apply to the data
+        """
+        import torch
+        import torch.nn as nn
+        import kornia.augmentation as K
+        from torchgeo.transforms import indices
+
+        transforms = []
+
+        # Add spectral indices
+        if self.spectral_indices:
+            for idx in self.spectral_indices:
+                if idx["type"] == "NDWI":
+                    transforms.append(
+                        indices.AppendNDWI(
+                            index_green=idx.get("index_green", 1),
+                            index_nir=idx.get("index_nir", 3),
+                        )
+                    )
+                elif idx["type"] == "NDVI":
+                    transforms.append(
+                        indices.AppendNDVI(
+                            index_nir=idx.get("index_nir", 3),
+                            index_red=idx.get("index_red", 2),
+                        )
+                    )
+
+        # Add normalization
+        if self.normalize:
+            transforms.append(K.Normalize(mean=self.mean, std=self.std))
+
+        # Return the sequential transform
+        return nn.Sequential(*transforms) if transforms else None
+
+    def get_dataloaders(self, batch_size=4, num_workers=4):
+        """Get DataLoaders for the dataset.
+
+        Args:
+            batch_size: Batch size
+            num_workers: Number of workers for data loading
+
+        Returns:
+            Training and validation DataLoaders
+        """
+        from torch.utils.data import DataLoader
+
+        # Create DataLoaders
+        train_dataloader = DataLoader(
+            self.train_dset,
+            sampler=self.train_sampler,
+            batch_size=batch_size,
+            collate_fn=stack_samples,
+            num_workers=num_workers,
+        )
+        valid_dataloader = DataLoader(
+            self.valid_dset,
+            sampler=self.valid_sampler,
+            batch_size=batch_size,
+            collate_fn=stack_samples,
+            num_workers=num_workers,
+        )
+
+        return train_dataloader, valid_dataloader
+
+
 def get_dataset(config, transform=None):
     """Get dataset based on configuration.
-    
+
     Args:
         config: Configuration object
         transform: Optional transforms to apply
-        
+
     Returns:
         Dataset instance
     """
-    # Detect dataset type from input dirs
+    # Check for Earth Surface Water dataset
+    if hasattr(config, "dataset") and config.dataset == "earth_surface_water":
+        # Handle Earth Surface Water dataset
+        spectral_indices = getattr(config, "spectral_indices", None)
+        normalize = getattr(config, "normalize", True)
+        image_size = getattr(config, "image_size", (512, 512))
+        dataset_url = getattr(
+            config,
+            "dataset_url",
+            "https://hf.co/datasets/cordmaur/earth_surface_water/resolve/main/earth_surface_water.zip",
+        )
+
+        return EarthSurfaceWaterDataset(
+            dataset_url=dataset_url,
+            image_size=image_size,
+            normalize=normalize,
+            spectral_indices=spectral_indices,
+        )
+
+    # Handle other dataset types
     input_dirs = config.input_dirs
     if isinstance(input_dirs, str):
         input_dirs = [input_dirs]
-    
+
     if len(input_dirs) == 0:
         raise ValueError("No input directories specified")
-    
+
     first_input = input_dirs[0]
-    if first_input.endswith('.csv'):
+    if first_input.endswith(".csv"):
         # CSV dataset
         return CSVDataset(
             csv_path=first_input,
@@ -196,28 +436,31 @@ def get_dataset(config, transform=None):
             target_col=getattr(config, "target_col", "target_path"),
             transforms=transform,
             image_size=getattr(config, "image_size", (224, 224)),
-            root_dir=getattr(config, "root_dir", None)
+            root_dir=getattr(config, "root_dir", None),
         )
     else:
         # Directory dataset
         image_paths = []
         target_paths = []
-        
+
         # This is just a simple implementation - customize as needed
         for directory in input_dirs:
             if not os.path.exists(directory):
                 continue
-                
+
             # Find all images with common extensions
-            for ext in ['jpg', 'jpeg', 'png', 'tif', 'tiff']:
+            for ext in ["jpg", "jpeg", "png", "tif", "tiff"]:
                 image_paths.extend(
-                    [os.path.join(directory, f) for f in os.listdir(directory) 
-                     if f.lower().endswith(f'.{ext}')]
+                    [
+                        os.path.join(directory, f)
+                        for f in os.listdir(directory)
+                        if f.lower().endswith(f".{ext}")
+                    ]
                 )
-        
+
         return BaseImageDataset(
             image_paths=image_paths,
             target_paths=None,  # Customize target finding logic
             transforms=transform,
-            image_size=getattr(config, "image_size", (224, 224))
+            image_size=getattr(config, "image_size", (224, 224)),
         )

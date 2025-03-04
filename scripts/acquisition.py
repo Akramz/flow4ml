@@ -29,19 +29,23 @@ import argparse
 
 def main():
     """Main function for data acquisition.
-    
+
     Implement your data acquisition logic here.
     """
     parser = argparse.ArgumentParser(description="Data acquisition script")
     parser.add_argument("--source", type=str, help="Source type for data acquisition")
-    parser.add_argument("--output", type=str, help="Output directory for processed data")
-    
+    parser.add_argument(
+        "--output", type=str, help="Output directory for processed data"
+    )
+
     # Add your custom arguments here
-    
+
     args = parser.parse_args()
-    
+
     print("Data acquisition placeholder")
-    print(f"This script would acquire data from {args.source} and save to {args.output}")
+    print(
+        f"This script would acquire data from {args.source} and save to {args.output}"
+    )
     print("Customize this script with your specific data acquisition logic")
 
 
