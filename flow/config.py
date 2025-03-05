@@ -11,7 +11,7 @@ Core features:
 Example:
    config = TrainerConfig(
        model_name="unet",
-       backbone_name="resnet18", 
+       backbone_name="resnet18",
        input_dirs="data/train.csv",
        in_channels=5,
        batch_size=32
@@ -20,7 +20,7 @@ Example:
 
 from pathlib import Path
 from enum import Enum
-from typing import List, Optional, Union, Dict, Any
+from typing import List, Optional, Union, Dict, Any, Tuple
 
 from pydantic import BaseModel, field_validator, model_validator
 import torch
@@ -118,6 +118,15 @@ class TaskTypeEnum(str, Enum):
     regression = "regression"
 
 
+class SpectralIndex(BaseModel):
+    """Configuration for a spectral index."""
+
+    type: str
+    index_green: Optional[int] = None
+    index_nir: Optional[int] = None
+    index_red: Optional[int] = None
+
+
 class TrainerConfig(BaseModel):
     """Validate input from yaml and/or argparse before passing to train.py."""
 
@@ -173,6 +182,13 @@ class TrainerConfig(BaseModel):
     in_channels: Optional[int] = None
     out_channels: Optional[int] = None
     precision: PrecisionEnum = PrecisionEnum.float32
+
+    # Dataset parameters
+    dataset: Optional[str] = None
+    dataset_url: Optional[str] = None
+    image_size: Optional[List[int]] = None
+    normalize: bool = False
+    spectral_indices: List[SpectralIndex] = []
 
     # Misc parameters
     activation: ActivationEnum = ActivationEnum.relu

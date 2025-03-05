@@ -6,7 +6,7 @@ This file provides:
 2. Custom model implementations
 3. Factory function for model creation
 
-For TorchGeo models (UNet, UPerNet, DeepLabV3, etc.), we use the 
+For TorchGeo models (UNet, UPerNet, DeepLabV3, etc.), we use the
 TorchGeo trainer directly which handles model creation.
 """
 
@@ -15,7 +15,16 @@ import torch.nn as nn
 
 
 class RandomModel(nn.Module):
-    """Random baseline model that outputs random predictions."""
+    """A model that outputs random predictions.
+
+    This can be useful for testing data pipelines and evaluation metrics
+    without implementing actual model logic.
+
+    Args:
+        in_channels: Number of input channels
+        out_channels: Number of output channels
+        **kwargs: Additional model parameters
+    """
 
     def __init__(self, in_channels, out_channels, **kwargs):
         """Initialize the random model.
@@ -28,7 +37,8 @@ class RandomModel(nn.Module):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.dummy_param = nn.Parameter(torch.zeros(1))  # Needed for PyTorch Lightning
+        self.random_weight = nn.Parameter(torch.randn(1))
+        self.random_bias = nn.Parameter(torch.randn(1))
 
     def forward(self, x):
         """Forward pass that returns random predictions with the same shape as expected output.
@@ -40,8 +50,10 @@ class RandomModel(nn.Module):
             Random tensor of shape [batch_size, out_channels, height, width]
         """
         batch_size, _, height, width = x.shape
-        # Generate random predictions with proper shape
-        return torch.rand(batch_size, self.out_channels, height, width, device=x.device)
+        random_noise = torch.rand(
+            batch_size, self.out_channels, height, width, device=x.device
+        )
+        return random_noise * self.random_weight + self.random_bias
 
 
 class CustomModel(nn.Module):

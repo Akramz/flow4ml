@@ -20,6 +20,7 @@ Usage:
         --lr_range 1e-5,1e-2 --wd_range 1e-6,1e-3 --batch_size_range 16,32,64
 """
 
+from pdb import set_trace
 import argparse
 import os
 import yaml
@@ -207,13 +208,8 @@ class HyperparameterSearch:
         model = get_model(config)
         datamodule = get_datamodule(self.task_type, config)
         task = get_task(
-            self.task_type,
-            model,
-            loss=config.loss,
-            learning_rate=config.lr,
-            weight_decay=config.weight_decay,
-            optimizer=config.optimizer,
-            scheduler=config.scheduler,
+            model=model,
+            **config.__dict__,
             scheduler_params={
                 "patience": config.patience,
                 "t_max": config.max_epochs // 2,
@@ -242,7 +238,7 @@ class HyperparameterSearch:
         trainer = pl.Trainer(
             max_epochs=config.max_epochs,
             accelerator="gpu" if config.gpu_ids else "cpu",
-            devices=config.gpu_ids if config.gpu_ids else None,
+            devices=config.gpu_ids if config.gpu_ids else 1,
             logger=logger,
             callbacks=[early_stop, checkpoint_callback],
             enable_progress_bar=False,  # Disable progress bar for cleaner output
@@ -423,14 +419,10 @@ def main():
 
     # Get task
     task = get_task(
-        task_type,
-        model,
-        loss=config.loss,
-        learning_rate=config.lr,
-        weight_decay=config.weight_decay,
-        optimizer=config.optimizer,
-        scheduler=config.scheduler,
+        model=model,
+        **config.__dict__,
         scheduler_params={
+            "scheduler": config.scheduler,
             "patience": config.patience,
             "t_max": config.max_epochs // 10,
         },
@@ -473,7 +465,7 @@ def main():
     trainer = pl.Trainer(
         max_epochs=config.max_epochs,
         accelerator="gpu" if config.gpu_ids else "cpu",
-        devices=config.gpu_ids if config.gpu_ids else None,
+        devices=config.gpu_ids if config.gpu_ids else 1,
         logger=logger,
         callbacks=callbacks,
         deterministic=True,

@@ -11,6 +11,7 @@ Customize these classes for your specific data structure and tasks.
 
 import os
 from typing import Dict, List, Callable, Optional, Tuple, Union
+from pdb import set_trace
 
 import numpy as np
 import torch
@@ -101,7 +102,7 @@ class BaseImageDataset(Dataset):
             target = Image.open(target_path).convert("L")
             target = T.Resize(self.image_size)(target)
             target = T.ToTensor()(target)
-            sample["target"] = target
+            sample["mask"] = target
 
         return sample
 
@@ -181,10 +182,10 @@ class EarthSurfaceWaterDataset:
 
     def scale(self, item):
         """Scale Sentinel-2 values to reflectance.
-        
+
         Args:
             item: Item to scale
-            
+
         Returns:
             Scaled item
         """
@@ -344,18 +345,18 @@ class EarthSurfaceWaterDataset:
         # Add spectral indices
         if self.spectral_indices:
             for idx in self.spectral_indices:
-                if idx["type"] == "NDWI":
+                if idx.type == "NDWI":
                     transforms.append(
                         indices.AppendNDWI(
-                            index_green=idx.get("index_green", 1),
-                            index_nir=idx.get("index_nir", 3),
+                            index_green=idx.index_green,
+                            index_nir=idx.index_nir,
                         )
                     )
-                elif idx["type"] == "NDVI":
+                elif idx.type == "NDVI":
                     transforms.append(
                         indices.AppendNDVI(
-                            index_nir=idx.get("index_nir", 3),
-                            index_red=idx.get("index_red", 2),
+                            index_nir=idx.index_nir,
+                            index_red=idx.index_red,
                         )
                     )
 
@@ -368,33 +369,35 @@ class EarthSurfaceWaterDataset:
 
     def __len__(self):
         """Return the total number of samples in the dataset.
-        
+
         Returns:
             int: Total number of samples (train + validation)
         """
         # Return the combined length of training and validation samplers
         return len(self.train_sampler) + len(self.valid_sampler)
-        
+
     def __getitem__(self, idx):
         """Get a random sample from the dataset.
-        
+
         Args:
             idx: Index is ignored since we're using a random sampler
-            
+
         Returns:
             Sample dictionary with image and mask tensors
         """
         # Import torch
         import torch
-        
+
         # Determine whether to use training or validation dataset based on idx
         # For reproducibility, we'll use a seed based on idx, but still get random samples
-        train_ratio = len(self.train_sampler) / (len(self.train_sampler) + len(self.valid_sampler))
+        train_ratio = len(self.train_sampler) / (
+            len(self.train_sampler) + len(self.valid_sampler)
+        )
         use_train = torch.rand(1).item() < train_ratio
-        
+
         # Set a seed based on idx for reproducibility
         torch.manual_seed(idx)
-        
+
         try:
             if use_train:
                 # Get a random sample from training dataset
@@ -404,30 +407,27 @@ class EarthSurfaceWaterDataset:
                 # Get a random sample from validation dataset
                 coords = next(iter(self.valid_sampler))
                 sample_dict = self.valid_dset[coords]
-                
+
             # Extract image and mask tensors directly from the sample
             image = sample_dict["image"]
             mask = sample_dict["mask"].float()
-            
+
             # Apply transforms if available
             if self.transform is not None:
                 image = self.transform(image)
-                
-            return {"image": image, "mask": mask}
-            
+
+            return {"image": image.squeeze(), "mask": mask.squeeze().long()}
+
         except Exception as e:
             # If there's an error, return a dummy sample
             print(f"Error getting sample: {e}")
             print(f"Returning dummy sample for index {idx}")
-            
+
             # Create dummy sample with proper dimensions
             image_shape = (3, self.image_size[0], self.image_size[1])
             mask_shape = (1, self.image_size[0], self.image_size[1])
-            
-            return {
-                "image": torch.zeros(image_shape),
-                "mask": torch.zeros(mask_shape)
-            }
+
+            return {"image": torch.zeros(image_shape), "mask": torch.zeros(mask_shape)}
 
 
 def get_dataset(config, transform=None):

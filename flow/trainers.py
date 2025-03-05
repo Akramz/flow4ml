@@ -10,6 +10,7 @@ This module provides:
 Customize this file to fit your specific task and metrics needs.
 """
 
+from pdb import set_trace
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -74,30 +75,6 @@ class BaseTask(pl.LightningModule):
         else:
             raise ValueError(f"Unsupported loss: {loss_name}")
 
-    def configure_metrics(self):
-        """Configure metrics for evaluation."""
-        # Customize or extend these metrics for your specific task
-        self.train_metrics = MetricCollection(
-            {
-                "train_mse": MeanSquaredError(),
-                "train_mae": MeanAbsoluteError(),
-            }
-        )
-
-        self.val_metrics = MetricCollection(
-            {
-                "val_mse": MeanSquaredError(),
-                "val_mae": MeanAbsoluteError(),
-            }
-        )
-
-        self.test_metrics = MetricCollection(
-            {
-                "test_mse": MeanSquaredError(),
-                "test_mae": MeanAbsoluteError(),
-            }
-        )
-
     def forward(self, x):
         """Forward pass."""
         return self.model(x)
@@ -112,13 +89,27 @@ class BaseTask(pl.LightningModule):
         Returns:
             Loss value
         """
-        # Customize this method for your data format
-        x, y = batch["image"], batch["target"]
+        x, y = batch["image"], batch["mask"]
         y_hat = self(x)
+
+        if y.dim() == 4 and y.size(1) == 1:
+            y = y.squeeze(1)
+
+        # Convert target to Long type for CE loss
+        y = y.long()
+
+        # y_hat should remain [B, C, H, W] for cross entropy loss
         loss = self.loss_fn(y_hat, y)
 
+        # For metrics, ensure predictions and targets have compatible shapes
+        # For multi-class segmentation, convert predictions to class indices
+        if y_hat.size(1) > 1 and y.dim() < 4:  # Multi-class case
+            y_hat_for_metrics = y_hat.argmax(dim=1)  # [B, H, W]
+        else:
+            y_hat_for_metrics = y_hat
+
         # Update and log metrics
-        self.train_metrics(y_hat, y)
+        self.train_metrics(y_hat_for_metrics, y)
         self.log("train_loss", loss)
         self.log_dict(self.train_metrics)
 
@@ -135,12 +126,16 @@ class BaseTask(pl.LightningModule):
             batch: Current batch
             batch_idx: Index of current batch
         """
-        x, y = batch["image"], batch["target"]
+        x, y = batch["image"], batch["mask"]
         y_hat = self(x)
         loss = self.loss_fn(y_hat, y)
+        if y_hat.size(1) > 1 and y.dim() < 4:
+            y_hat_for_metrics = y_hat.argmax(dim=1)
+        else:
+            y_hat_for_metrics = y_hat
 
         # Update and log metrics
-        self.val_metrics(y_hat, y)
+        self.val_metrics(y_hat_for_metrics, y)
         self.log("val_loss", loss)
         self.log_dict(self.val_metrics)
 
@@ -155,11 +150,18 @@ class BaseTask(pl.LightningModule):
             batch: Current batch
             batch_idx: Index of current batch
         """
-        x, y = batch["image"], batch["target"]
+        x, y = batch["image"], batch["mask"]
         y_hat = self(x)
+        if y.dim() == 4 and y.size(1) == 1:
+            y = y.squeeze(1)
+        y = y.long()
+        if y_hat.size(1) > 1 and y.dim() < 4:
+            y_hat_for_metrics = y_hat.argmax(dim=1)  # [B, H, W]
+        else:
+            y_hat_for_metrics = y_hat
 
         # Update and log metrics
-        self.test_metrics(y_hat, y)
+        self.test_metrics(y_hat_for_metrics, y)
         self.log_dict(self.test_metrics)
 
     def configure_optimizers(self):
@@ -230,55 +232,6 @@ class BaseTask(pl.LightningModule):
         else:
             raise ValueError(f"Unsupported scheduler: {self.hparams.scheduler}")
 
-    def visualize_batch(self, x, y, y_hat, stage, idx):
-        """Visualize a batch of data.
-
-        Args:
-            x: Input images
-            y: Target
-            y_hat: Predictions
-            stage: Current stage (train, val, test)
-            idx: Current index/epoch
-        """
-        # Customize this method based on your task/data
-        if not hasattr(self, "logger") or self.logger is None:
-            return
-
-        # Take the first few samples
-        n_samples = min(4, x.size(0))
-
-        fig, axs = plt.subplots(n_samples, 3, figsize=(12, 4 * n_samples))
-        if n_samples == 1:
-            axs = axs.reshape(1, -1)
-
-        for i in range(n_samples):
-            # Display input image (assumes first 3 channels are RGB)
-            img = x[i, :3].permute(1, 2, 0).cpu().numpy()
-            img = np.clip(img, 0, 1)  # Ensure values are in [0, 1]
-            axs[i, 0].imshow(img)
-            axs[i, 0].set_title("Input")
-            axs[i, 0].axis("off")
-
-            # Display target (adapt this to your task)
-            target = y[i, 0].cpu().numpy()
-            axs[i, 1].imshow(target, cmap="viridis")
-            axs[i, 1].set_title("Target")
-            axs[i, 1].axis("off")
-
-            # Display prediction
-            pred = y_hat[i, 0].detach().cpu().numpy()
-            axs[i, 2].imshow(pred, cmap="viridis")
-            axs[i, 2].set_title("Prediction")
-            axs[i, 2].axis("off")
-
-        plt.tight_layout()
-
-        # Log to tensorboard
-        self.logger.experiment.add_figure(
-            f"{stage}_visualization_epoch_{idx}", fig, global_step=self.global_step
-        )
-        plt.close(fig)
-
 
 class SegmentationTask(BaseTask):
     """Task for semantic segmentation.
@@ -286,7 +239,7 @@ class SegmentationTask(BaseTask):
     This class serves as a wrapper around TorchGeo's SemanticSegmentationTask.
     """
 
-    def __init__(self, model, *args, **kwargs):
+    def __init__(self, modelc, *args, **kwargs):
         """Initialize segmentation task.
 
         Args:
@@ -297,52 +250,23 @@ class SegmentationTask(BaseTask):
         from torchgeo.trainers import SemanticSegmentationTask
 
         # For RandomModel, we use our own implementation
-        if model.__class__.__name__ == "RandomModel":
-            super().__init__(model, *args, **kwargs)
-            # Add segmentation-specific metrics
-            self.val_metrics.add_metrics(
-                {
-                    "val_precision": Precision(
-                        task=(
-                            "binary"
-                            if kwargs.get("out_channels", 2) <= 2
-                            else "multiclass"
-                        ),
-                        num_classes=kwargs.get("out_channels", 2),
-                    ),
-                    "val_recall": Recall(
-                        task=(
-                            "binary"
-                            if kwargs.get("out_channels", 2) <= 2
-                            else "multiclass"
-                        ),
-                        num_classes=kwargs.get("out_channels", 2),
-                    ),
-                    "val_f1": F1Score(
-                        task=(
-                            "binary"
-                            if kwargs.get("out_channels", 2) <= 2
-                            else "multiclass"
-                        ),
-                        num_classes=kwargs.get("out_channels", 2),
-                    ),
-                }
-            )
+        if modelc.__class__.__name__ == "RandomModel":
+            super().__init__(modelc, *args, **kwargs)
             self.is_random_model = True
         else:
             # Use TorchGeo's implementation for standard models
             # Extract parameters for TorchGeo
-            model_name = kwargs.pop("model_name", "unet")
+            model_name = kwargs.pop("model_name", None)
             backbone_name = kwargs.pop("backbone_name", None)
-            weight_init = kwargs.pop("weight_init", "random")
-            weights = "imagenet" if weight_init == "pretrained" else None
-            in_channels = kwargs.pop("in_channels", 3)
-            out_channels = kwargs.pop("out_channels", 2)
-            loss_name = kwargs.pop("loss", "ce")
-            lr = kwargs.pop("learning_rate", 0.001)
+            weight_init = kwargs.pop("weight_init", None)
+            weights = True if weight_init == "pretrained" else False
+            in_channels = kwargs.pop("in_channels", None)
+            out_channels = kwargs.pop("out_channels", None)
+            loss_name = kwargs.pop("loss", None)
+            lr = kwargs.pop("learning_rate", None)
 
-            # Create TorchGeo task
-            self.torchgeo_task = SemanticSegmentationTask(
+            # First create TorchGeo task - call parent's __init__ with this as the model
+            torchgeo_task = SemanticSegmentationTask(
                 model=model_name,
                 backbone=backbone_name,
                 weights=weights,
@@ -351,21 +275,64 @@ class SegmentationTask(BaseTask):
                 loss=loss_name,
                 lr=lr,
             )
+
+            # Call super().__init__() with the TorchGeo task's model
+            super().__init__(torchgeo_task.model, *args, **kwargs)
+
+            # Now assign the task after parent initialization is complete
+            self.torchgeo_task = torchgeo_task
             self.is_random_model = False
 
             # For access to hyperparameters
-            self.hparams = {}
+            param_dict = {}
             for key, value in kwargs.items():
-                self.hparams[key] = value
+                param_dict[key] = value
 
             # Add model parameters for completeness
-            self.hparams["model_name"] = model_name
-            self.hparams["backbone_name"] = backbone_name
-            self.hparams["weight_init"] = weight_init
-            self.hparams["in_channels"] = in_channels
-            self.hparams["out_channels"] = out_channels
-            self.hparams["loss"] = loss_name
-            self.hparams["learning_rate"] = lr
+            param_dict["model_name"] = model_name
+            param_dict["backbone_name"] = backbone_name
+            param_dict["weight_init"] = weight_init
+            param_dict["in_channels"] = in_channels
+            param_dict["out_channels"] = out_channels
+            param_dict["loss"] = loss_name
+            param_dict["learning_rate"] = lr
+
+            # Save hyperparameters properly
+            self.save_hyperparameters(param_dict)
+
+    def configure_metrics(self):
+        """Configure metrics for segmentation evaluation.
+
+        Use classification metrics appropriate for segmentation tasks.
+        """
+        # Determine task type and number of classes
+        num_classes = self.hparams.get("out_channels", 2)
+        task_type = "binary" if num_classes <= 2 else "multiclass"
+
+        # Configure metrics for each stage
+        self.train_metrics = MetricCollection(
+            {
+                "train_precision": Precision(task=task_type, num_classes=num_classes),
+                "train_recall": Recall(task=task_type, num_classes=num_classes),
+                "train_f1": F1Score(task=task_type, num_classes=num_classes),
+            }
+        )
+
+        self.val_metrics = MetricCollection(
+            {
+                "val_precision": Precision(task=task_type, num_classes=num_classes),
+                "val_recall": Recall(task=task_type, num_classes=num_classes),
+                "val_f1": F1Score(task=task_type, num_classes=num_classes),
+            }
+        )
+
+        self.test_metrics = MetricCollection(
+            {
+                "test_precision": Precision(task=task_type, num_classes=num_classes),
+                "test_recall": Recall(task=task_type, num_classes=num_classes),
+                "test_f1": F1Score(task=task_type, num_classes=num_classes),
+            }
+        )
 
     def forward(self, x):
         """Forward pass."""
@@ -379,9 +346,6 @@ class SegmentationTask(BaseTask):
         if self.is_random_model:
             return super().training_step(batch, batch_idx)
         else:
-            # Adapt batch format if needed
-            if "image" in batch and "target" in batch and "mask" not in batch:
-                batch = {"image": batch["image"], "mask": batch["target"]}
             return self.torchgeo_task.training_step(batch, batch_idx)
 
     def validation_step(self, batch, batch_idx):
@@ -389,9 +353,6 @@ class SegmentationTask(BaseTask):
         if self.is_random_model:
             return super().validation_step(batch, batch_idx)
         else:
-            # Adapt batch format if needed
-            if "image" in batch and "target" in batch and "mask" not in batch:
-                batch = {"image": batch["image"], "mask": batch["target"]}
             return self.torchgeo_task.validation_step(batch, batch_idx)
 
     def test_step(self, batch, batch_idx):
@@ -399,9 +360,6 @@ class SegmentationTask(BaseTask):
         if self.is_random_model:
             return super().test_step(batch, batch_idx)
         else:
-            # Adapt batch format if needed
-            if "image" in batch and "target" in batch and "mask" not in batch:
-                batch = {"image": batch["image"], "mask": batch["target"]}
             return self.torchgeo_task.test_step(batch, batch_idx)
 
     def configure_optimizers(self):
@@ -413,59 +371,62 @@ class SegmentationTask(BaseTask):
 
     def visualize_batch(self, x, y, y_hat, stage, idx):
         """Visualization for segmentation tasks."""
-        if not hasattr(self, "logger") or self.logger is None:
-            return
 
-        n_samples = min(4, x.size(0))
+        # x.shape == 4, 1, 9, 512, 512
+        # y.shape == 4, 512, 512
+        # y_hat.shape == 4, 2, 512, 512
+
+        # Squeeze x & Get the first 3 channels
+        x = x.squeeze(1)[:, :3]  # 4, 3, 512, 512
+
+        # Do argmax on y_hat
+        y_hat = y_hat.argmax(dim=1)  # 4, 512, 512
+
+        # what are the expected shapes?
+        # x.shape == 4, 3, 512, 512
+        # y.shape == 4, 512, 512
+        # y_hat.shape == 4, 512, 512
+
+        # Min-max normalize the images one by one
+        for i in range(x.size(0)):
+            x[i] = (x[i] - x[i].min()) / (x[i].max() - x[i].min())
+
+        # Convert x, y, and y_hat to numpy arrays
+        x = x.cpu().numpy()
+        y = y.cpu().numpy()
+        y_hat = y_hat.cpu().numpy()
+
+        n_samples = min(4, x.shape[0])
 
         fig, axs = plt.subplots(n_samples, 3, figsize=(12, 4 * n_samples))
         if n_samples == 1:
             axs = axs.reshape(1, -1)
 
         for i in range(n_samples):
-            # Input image - for multispectral data, show RGB channels if available
-            if x.size(1) >= 3:
-                img = x[i, :3].permute(1, 2, 0).cpu().numpy()
-                img = np.clip(img, 0, 1)
-                axs[i, 0].imshow(img)
-            else:
-                img = x[i, 0].cpu().numpy()
-                axs[i, 0].imshow(img, cmap="viridis")
 
-            axs[i, 0].set_title("Input")
+            # Input image (RGB)
+            axs[i, 0].imshow(np.transpose(x[i], (1, 2, 0)))
+            axs[i, 0].set_title("Input Image")
             axs[i, 0].axis("off")
 
-            # Target mask (binary or multi-class)
-            if y.size(1) == 1:
-                # Binary mask
-                target = y[i, 0].cpu().numpy()
-                axs[i, 1].imshow(target, cmap="gray")
-            else:
-                # Multi-class mask (display class indices)
-                target = y[i].argmax(0).cpu().numpy()
-                axs[i, 1].imshow(target, cmap="tab20")
-
-            axs[i, 1].set_title("Target Mask")
+            # Ground truth mask
+            axs[i, 1].imshow(y[i], cmap="tab20")
+            axs[i, 1].set_title("Ground Truth")
             axs[i, 1].axis("off")
 
             # Predicted mask
-            if y_hat.size(1) == 1:
-                # Binary prediction
-                pred = y_hat[i, 0].detach().cpu().numpy()
-                pred = (pred > 0.5).astype(np.float32)  # Threshold
-                axs[i, 2].imshow(pred, cmap="gray")
-            else:
-                # Multi-class prediction
-                pred = y_hat[i].argmax(0).detach().cpu().numpy()
-                axs[i, 2].imshow(pred, cmap="tab20")
-
-            axs[i, 2].set_title("Predicted Mask")
+            axs[i, 2].imshow(y_hat[i], cmap="tab20")
+            axs[i, 2].set_title("Prediction")
             axs[i, 2].axis("off")
 
         plt.tight_layout()
-        self.logger.experiment.add_figure(
-            f"{stage}_segmentation_{idx}", fig, global_step=self.global_step
-        )
+
+        # Log the figure if logger is available
+        if hasattr(self, "logger") and self.logger is not None:
+            self.logger.experiment.add_figure(
+                f"{stage}_segmentation_{idx}", fig, global_step=self.global_step
+            )
+
         plt.close(fig)
 
 
@@ -475,6 +436,23 @@ class RegressionTask(BaseTask):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Additional regression metrics can be added here
+
+    def configure_metrics(self):
+        """Configure metrics for regression tasks.
+
+        Use appropriate regression metrics (MSE, MAE).
+        """
+        self.train_metrics = MetricCollection(
+            {"train_mse": MeanSquaredError(), "train_mae": MeanAbsoluteError()}
+        )
+
+        self.val_metrics = MetricCollection(
+            {"val_mse": MeanSquaredError(), "val_mae": MeanAbsoluteError()}
+        )
+
+        self.test_metrics = MetricCollection(
+            {"test_mse": MeanSquaredError(), "test_mae": MeanAbsoluteError()}
+        )
 
     def visualize_batch(self, x, y, y_hat, stage, idx):
         """Override to customize visualization for regression tasks."""
@@ -531,8 +509,6 @@ def get_task(task_type, model, **kwargs):
     model_name = kwargs.pop("model_name", "unet")
 
     if task_type.lower() == "segmentation":
-        # For segmentation tasks, we pass the model_name to help TorchGeo
-        # initialize the right model type
         return SegmentationTask(model, model_name=model_name, **kwargs)
     elif task_type.lower() == "regression":
         return RegressionTask(model, **kwargs)

@@ -97,13 +97,13 @@ def compute_errors(task, dataloader):
 
     with torch.no_grad():
         for batch in tqdm(dataloader, desc="Computing errors"):
-            # Get input and target
+            # Get input and mask
             x = batch["image"].to(device)
 
-            if "target" not in batch:
+            if "mask" not in batch:
                 continue
 
-            y = batch["target"].to(device)
+            y = batch["mask"].to(device)
 
             # Generate prediction
             y_hat = task(x)
@@ -120,7 +120,7 @@ def compute_errors(task, dataloader):
                 metadata = {
                     key: batch[key][i]
                     for key in batch
-                    if key not in ["image", "target"] and isinstance(batch[key], list)
+                    if key not in ["image", "mask"] and isinstance(batch[key], list)
                 }
 
                 # Store results
@@ -129,7 +129,7 @@ def compute_errors(task, dataloader):
                         "mae": mae,
                         "max_error": max_error,
                         "input": x[i].cpu(),
-                        "target": y[i].cpu(),
+                        "mask": y[i].cpu(),
                         "prediction": y_hat[i].cpu(),
                     }
                 )
@@ -217,10 +217,10 @@ def visualize_worst_samples(analysis_results, output_dir):
         axes[0].set_title("Input")
         axes[0].axis("off")
 
-        # Target
-        target = sample["target"][0].numpy()
-        im = axes[1].imshow(target, cmap="viridis")
-        axes[1].set_title("Target")
+        # mask
+        mask = sample["mask"][0].numpy()
+        im = axes[1].imshow(mask, cmap="viridis")
+        axes[1].set_title("mask")
         axes[1].axis("off")
         plt.colorbar(im, ax=axes[1])
 
@@ -232,7 +232,7 @@ def visualize_worst_samples(analysis_results, output_dir):
         plt.colorbar(im, ax=axes[2])
 
         # Error map
-        error_map = np.abs(pred - target)
+        error_map = np.abs(pred - mask)
         im = axes[3].imshow(error_map, cmap="hot")
         axes[3].set_title(f"Error (MAE: {sample['mae']:.4f})")
         axes[3].axis("off")
@@ -404,7 +404,7 @@ def main():
     print("\nNext steps to improve model performance:")
     print("1. Review visualizations of worst samples to identify patterns")
     print("2. Check if certain metadata categories correlate with higher errors")
-    print("3. Consider model architecture changes or targeted augmentations")
+    print("3. Consider model architecture changes or masked augmentations")
     print("4. Experiment with different loss functions or regularization")
 
 

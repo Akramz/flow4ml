@@ -193,9 +193,9 @@ def save_predictions(task, datamodule, output_dir):
                     ax[0].axis("off")
 
                     # Plot ground truth if available
-                    if "target" in batch:
-                        target = batch["target"][j, 0].cpu().numpy()
-                        ax[1].imshow(target, cmap="viridis")
+                    if "mask" in batch:
+                        mask = batch["mask"][j, 0].cpu().numpy()
+                        ax[1].imshow(mask, cmap="viridis")
                         ax[1].set_title("Ground Truth")
                         ax[1].axis("off")
                     else:

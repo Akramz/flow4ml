@@ -21,15 +21,15 @@ scheduler: "cosine"  # Cosine annealing scheduler
 t_max: 10  # T_max for cosine scheduler
 
 # Loss function
-loss: "cross_entropy"  # For segmentation task
+loss: "ce"  # For segmentation task
 
 # Training parameters
 batch_size: 4  # From example
 max_epochs: 30  # More epochs for better convergence
 seed: 42  # Random seed for reproducibility
-gpu_ids: [0]  # GPU ID to use
+gpu_ids: []  # GPU ID to use
 val_ratio: 0.2  # Validation split ratio
-num_workers: 4  # Number of workers for data loading
+num_workers: 0  # Number of workers for data loading
 
 # Experiment parameters
 experiment_short_name: "upernet_resnet34_water_surface"
@@ -38,7 +38,6 @@ output_dir: "model_runs/"
 overwrite: true  # Overwrite existing experiment
 early_stop: true  # Use early stopping
 early_stop_patience: 10  # Patience for early stopping
-metrics: ["iou", "accuracy"]  # Metrics to track
 
 # Data parameters
 dataset: "earth_surface_water"
