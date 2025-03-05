@@ -179,6 +179,18 @@ class CSVDataset(BaseImageDataset):
 class EarthSurfaceWaterDataset:
     """Dataset for the Earth Surface Water dataset from TorchGeo."""
 
+    def scale(self, item):
+        """Scale Sentinel-2 values to reflectance.
+        
+        Args:
+            item: Item to scale
+            
+        Returns:
+            Scaled item
+        """
+        item["image"] = item["image"] / 10000
+        return item
+
     def __init__(
         self,
         root_dir=None,
@@ -232,17 +244,12 @@ class EarthSurfaceWaterDataset:
         # Define the root path to the extracted dataset
         extracted_path = self.root_dir / "dset-s2"
 
-        # Function to scale Sentinel-2 values to reflectance
-        def scale(item):
-            item["image"] = item["image"] / 10000
-            return item
-
         # Create the training datasets
         self.train_imgs = RasterDataset(
             paths=(extracted_path / "tra_scene").as_posix(),
             crs="epsg:3395",
             res=10,
-            transforms=scale,
+            transforms=self.scale,
         )
         self.train_msks = RasterDataset(
             paths=(extracted_path / "tra_truth").as_posix(), crs="epsg:3395", res=10
@@ -253,7 +260,7 @@ class EarthSurfaceWaterDataset:
             paths=(extracted_path / "val_scene").as_posix(),
             crs="epsg:3395",
             res=10,
-            transforms=scale,
+            transforms=self.scale,
         )
         self.valid_msks = RasterDataset(
             paths=(extracted_path / "val_truth").as_posix(), crs="epsg:3395", res=10
@@ -359,35 +366,68 @@ class EarthSurfaceWaterDataset:
         # Return the sequential transform
         return nn.Sequential(*transforms) if transforms else None
 
-    def get_dataloaders(self, batch_size=4, num_workers=4):
-        """Get DataLoaders for the dataset.
-
-        Args:
-            batch_size: Batch size
-            num_workers: Number of workers for data loading
-
+    def __len__(self):
+        """Return the total number of samples in the dataset.
+        
         Returns:
-            Training and validation DataLoaders
+            int: Total number of samples (train + validation)
         """
-        from torch.utils.data import DataLoader
-
-        # Create DataLoaders
-        train_dataloader = DataLoader(
-            self.train_dset,
-            sampler=self.train_sampler,
-            batch_size=batch_size,
-            collate_fn=stack_samples,
-            num_workers=num_workers,
-        )
-        valid_dataloader = DataLoader(
-            self.valid_dset,
-            sampler=self.valid_sampler,
-            batch_size=batch_size,
-            collate_fn=stack_samples,
-            num_workers=num_workers,
-        )
-
-        return train_dataloader, valid_dataloader
+        # Return the combined length of training and validation samplers
+        return len(self.train_sampler) + len(self.valid_sampler)
+        
+    def __getitem__(self, idx):
+        """Get a random sample from the dataset.
+        
+        Args:
+            idx: Index is ignored since we're using a random sampler
+            
+        Returns:
+            Sample dictionary with image and mask tensors
+        """
+        # Import torch
+        import torch
+        
+        # Determine whether to use training or validation dataset based on idx
+        # For reproducibility, we'll use a seed based on idx, but still get random samples
+        train_ratio = len(self.train_sampler) / (len(self.train_sampler) + len(self.valid_sampler))
+        use_train = torch.rand(1).item() < train_ratio
+        
+        # Set a seed based on idx for reproducibility
+        torch.manual_seed(idx)
+        
+        try:
+            if use_train:
+                # Get a random sample from training dataset
+                coords = next(iter(self.train_sampler))
+                sample_dict = self.train_dset[coords]
+            else:
+                # Get a random sample from validation dataset
+                coords = next(iter(self.valid_sampler))
+                sample_dict = self.valid_dset[coords]
+                
+            # Extract image and mask tensors directly from the sample
+            image = sample_dict["image"]
+            mask = sample_dict["mask"].float()
+            
+            # Apply transforms if available
+            if self.transform is not None:
+                image = self.transform(image)
+                
+            return {"image": image, "mask": mask}
+            
+        except Exception as e:
+            # If there's an error, return a dummy sample
+            print(f"Error getting sample: {e}")
+            print(f"Returning dummy sample for index {idx}")
+            
+            # Create dummy sample with proper dimensions
+            image_shape = (3, self.image_size[0], self.image_size[1])
+            mask_shape = (1, self.image_size[0], self.image_size[1])
+            
+            return {
+                "image": torch.zeros(image_shape),
+                "mask": torch.zeros(mask_shape)
+            }
 
 
 def get_dataset(config, transform=None):

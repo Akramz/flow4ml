@@ -21,13 +21,8 @@ This use case focuses on identifying water surfaces from multispectral satellite
 Create a new environment using conda:
 
 ```bash
-conda env create -f environment.yml
-conda activate flow4ml
-```
-
-Or install dependencies directly:
-
-```bash
+mamba create -n watermap python=3.13
+conda activate watermap
 pip install -r requirements.txt
 pip install -e .
 ```

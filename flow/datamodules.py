@@ -43,7 +43,7 @@ class BaseDataModule(pl.LightningDataModule):
         super().__init__()
         self.config = config
         self.batch_size = getattr(config, "batch_size", 32)
-        self.num_workers = getattr(config, "num_workers", 4)
+        self.num_workers = getattr(config, "num_workers", 0)
         self.val_split = getattr(config, "val_ratio", 0.2)
         self.test_split = getattr(config, "test_split", None)
         self.image_size = getattr(config, "image_size", (224, 224))

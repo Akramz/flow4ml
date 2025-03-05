@@ -1,4 +1,4 @@
-* come_and_train version:
+* flow version:
 * Python version:
 * Operating System:
 

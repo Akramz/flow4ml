@@ -48,7 +48,7 @@ clean-test: ## remove test and coverage artifacts
 	rm -fr .pytest_cache
 
 lint/flake8: ## check style with flake8
-	flake8 come_and_train tests
+	flake8 flow tests
 
 lint: lint/flake8 ## check style
 
@@ -59,15 +59,15 @@ test-all: ## run tests on every Python version with tox
 	tox
 
 coverage: ## check code coverage quickly with the default Python
-	coverage run --source come_and_train setup.py test
+	coverage run --source flow setup.py test
 	coverage report -m
 	coverage html
 	$(BROWSER) htmlcov/index.html
 
 docs: ## generate Sphinx HTML documentation, including API docs
-	rm -f docs/come_and_train.rst
+	rm -f docs/flow.rst
 	rm -f docs/modules.rst
-	sphinx-apidoc -o docs/ come_and_train
+	sphinx-apidoc -o docs/ flow
 	$(MAKE) -C docs clean
 	$(MAKE) -C docs html
 	$(BROWSER) docs/_build/html/index.html

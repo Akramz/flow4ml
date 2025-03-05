@@ -1,5 +1,5 @@
-Welcome to come_and_train's documentation!
-======================================
+Welcome to flow's documentation!
+==============================
 
 .. toctree::
    :maxdepth: 2
